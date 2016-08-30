@@ -19,10 +19,10 @@ typealias AccountKitHandlerCompletion = (AccountKitHandler.AccountKitHandlerResp
 class AccountKitHandler: NSObject {
     
     ///The `AKFAccountKit` property that can be accessed if required.
-    var accountKit: AKFAccountKit
+    private(set) var accountKit: AKFAccountKit
     
     ///This property gives the `AKFResponseType` using which this class was instantiated.
-    var responseType: AKFResponseType
+    private(set) var responseType: AKFResponseType
     
     ///This property just passes the `currentAccessToken` from the class's `accountKit` object.
     var currentAccessToken: AKFAccessToken? {
@@ -30,10 +30,19 @@ class AccountKitHandler: NSObject {
     }
     
     ///This property gives the last obtained authorizationCode.
-    var currentAuthorizationCode: String?
+    private(set) var currentAuthorizationCode: String?
     
     ///Specifies if the app supports sending codes to Facebook (as an SMS alternative)
     var enableSendToFacebook = true
+    
+    ///Specifies the default country code that needs to be prefilled in the log in screen
+    var defaultCountryCode: String?
+    
+    ///The list of country codes that should be allowed.
+    var whitelistedCountryCodes: [String]?
+    
+    ///The list of country codes that should not be allowed.
+    var blacklistedCountryCodes: [String]?
     
     ///An optional boolean to determine if the user is logged in. This property will have a value if the account was logged in using access token. Else, it will be a `nil`. If the user was logged in with access token, the boolean value will give away the state of the log in.
     var isUserLoggedIn: Bool? {
@@ -41,7 +50,7 @@ class AccountKitHandler: NSObject {
     }
     
     ///This will hold the view controller from the previous session whose flow was not completed.
-    weak var resumeViewController: UIViewController?
+    private(set) weak var resumeViewController: UIViewController?
     
     //This property holds the last completion block for every log in call being made. This is cleaned up in the `cleanUp()` method.
     private var loginCompletion: AccountKitHandlerCompletion?
@@ -92,6 +101,9 @@ class AccountKitHandler: NSObject {
         if let phoneLoginViewController = accountKit.viewControllerForPhoneLoginWithPhoneNumber(nil, state: state) as? AKFViewController {
             phoneLoginViewController.enableSendToFacebook = true
             phoneLoginViewController.delegate = self
+            phoneLoginViewController.defaultCountryCode = defaultCountryCode
+            phoneLoginViewController.whitelistedCountryCodes = whitelistedCountryCodes
+            phoneLoginViewController.blacklistedCountryCodes = blacklistedCountryCodes
             if let phoneLoginViewController = phoneLoginViewController as? UIViewController {
                 viewController?.presentViewController(phoneLoginViewController, animated: true, completion: nil)
             }

@@ -1,4 +1,4 @@
-# attest
+# Attest
 A POC on Facebook Account Kit written in Swift 2.2.1.
 
 ### Facebook Account Kit
@@ -33,3 +33,11 @@ This wrapper class is called `AccountKitHandler`
 
 ###Note
 1. `isUserLoggedIn` is an optional boolean. This wrapper can determine the log-in state only if the authorization was done using access tokens. If authorization code was used, only the app's backend infrastructure can determine the state of log in. Hence, this property is an optional boolean.
+2. The white list and black list featrure works as below.
+
+| Lists                     | Result                                                                                                                                                                  |
+|---------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| No whitelist or blacklist | All country codes supported by Account Kit are available.                                                                                                               |
+| Whilelist                 | Only country codes in the whitelist are available.                                                                                                                      |
+| Blacklist                 | All country codes supported by Account Kit except those in the blacklist are available.                                                                                 |
+| Whitelist and blacklist   | Only the country codes in the whitelist that are not also in the blacklist are available. Note that the blacklist takes priority for codes that that are in both lists. |

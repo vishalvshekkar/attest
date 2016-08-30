@@ -11,8 +11,8 @@ import AccountKit
 
 private typealias Utilities = AttestViewController
 
-class AttestViewController: UIViewController, AKFViewControllerDelegate {
-
+class AttestViewController: UIViewController {
+    
     let accountKitHandler = AccountKitHandler(responseType: .AccessToken)
     
     override func viewDidLoad() {
@@ -33,6 +33,7 @@ class AttestViewController: UIViewController, AKFViewControllerDelegate {
     }
     
     @IBAction func loginWithPhone(sender: AnyObject) {
+        accountKitHandler.defaultCountryCode = "IN"
         accountKitHandler.logInWithPhoneNumber(nil, viewController: self) { (response) in
             self.handleResponse(response)
         }

@@ -9,7 +9,7 @@
 import UIKit
 
 class MainViewController: UIViewController, StoryboardIdentity {
-
+    
     @IBOutlet weak var topLabel: UILabel!
     @IBOutlet weak var middleLabel: UILabel!
     @IBOutlet weak var bottomLabel: UILabel!
