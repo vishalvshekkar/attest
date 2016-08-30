@@ -9,20 +9,32 @@
 import UIKit
 import AccountKit
 
+//MARK: - Typealiases
 private typealias AccountKitDelegate = AccountKitHandler
+private typealias AccountKitPreferencesDelegate = AccountKitHandler
 private typealias Utility = AccountKitHandler
 
 ///A closure that will be triggered at the response of any Account Kit activity.
 typealias AccountKitHandlerCompletion = (AccountKitHandler.AccountKitHandlerResponseState) -> ()
 
+typealias AccountKitAllPreferencesCompletion = (AccountKitHandler.AccountKitHandlerAllPreferencesResponseState) -> ()
+typealias AccountKitPreferenceCompletion = (AccountKitHandler.AccountKitHandlerPreferenceResponseState) -> ()
+
 ///A wrapper written on `AKFAccountKit`. This class translates the delegate patterns used by `AKFAccountKit` into closure callbacks with an `enum` parameter being passed to indicate the state of the response. This makes the usage cleaner and more readable.
 class AccountKitHandler: NSObject {
+    
+    //MARK: - Internal properties
     
     ///The `AKFAccountKit` property that can be accessed if required.
     private(set) var accountKit: AKFAccountKit
     
     ///This property gives the `AKFResponseType` using which this class was instantiated.
     private(set) var responseType: AKFResponseType
+    
+    ///This property accesses the accountPreferences object from the accountKit
+    var accountPreferences: AKFAccountPreferences? {
+        return accountKit.accountPreferences()
+    }
     
     ///This property just passes the `currentAccessToken` from the class's `accountKit` object.
     var currentAccessToken: AKFAccessToken? {
@@ -52,22 +64,30 @@ class AccountKitHandler: NSObject {
     ///This will hold the view controller from the previous session whose flow was not completed.
     private(set) weak var resumeViewController: UIViewController?
     
+    //MARK: - Private properties
+    
     //This property holds the last completion block for every log in call being made. This is cleaned up in the `cleanUp()` method.
     private var loginCompletion: AccountKitHandlerCompletion?
     
     //This property will hold the latest state string for every log in call being made.
     private var state = ""
     
+    private var getAllPreferencesArray = [AccountKitAllPreferencesCompletion]()
+    private var getPreferenceArray = [(key: String, closure: AccountKitPreferenceCompletion)]()
+    private var setPreferenceArray = [(key: String, closure: AccountKitPreferenceCompletion)]()
+    private var deletePreferenceArray = [(key: String, closure: AccountKitPreferenceCompletion)]()
     
     //MARK: - Initializer
     
     ///The only initializer for this class.
-    /// - parameter responseType: An `AKFResponseType` `enum` to be passed to specify the kind of log in to be done.
+    /// - parameter responseType: An `AKFResponseType enum` to be passed to specify the kind of log in to be done.
     init(responseType: AKFResponseType) {
         self.responseType = responseType
         accountKit = AKFAccountKit(responseType: responseType)
         super.init()
     }
+    
+    //MARK: - Internal login methods
     
     ///This method will pass the view controller from the previous session whose flow was not completed. It will also store this in `resumeViewController` property.
     func viewControllerForLoginResume() -> UIViewController? {
@@ -129,7 +149,50 @@ class AccountKitHandler: NSObject {
         accountKit.logOut()
     }
     
+    //MARK: - Internal preferences methods
+    
+    func getAllPreferences(completion: AccountKitAllPreferencesCompletion) {
+        if let accountPreferences = accountPreferences {
+            getAllPreferencesArray.append(completion)
+            accountPreferences.delegate = self
+            accountPreferences.loadPreferences()
+        } else {
+            completion(AccountKitHandler.AccountKitHandlerAllPreferencesResponseState.Failure(description: Constants.accountPreferencesNotAccessible))
+        }
+    }
+    
+    func getPreferenceForKey(key: String, completion: AccountKitPreferenceCompletion) {
+        if let accountPreferences = accountPreferences {
+            getPreferenceArray.append((key: key, closure: completion))
+            accountPreferences.delegate = self
+            accountPreferences.loadPreferenceForKey(key)
+        } else {
+            completion(AccountKitHandler.AccountKitHandlerPreferenceResponseState.Failure(description: Constants.accountPreferencesNotAccessible))
+        }
+    }
+    
+    func setPreferenceForKey(key: String, withValue value: String?, completion: AccountKitPreferenceCompletion) {
+        if let accountPreferences = accountPreferences {
+            setPreferenceArray.append((key: key, closure: completion))
+            accountPreferences.delegate = self
+            accountPreferences.setPreferenceForKey(key, value: value)
+        } else {
+            completion(AccountKitHandler.AccountKitHandlerPreferenceResponseState.Failure(description: Constants.accountPreferencesNotAccessible))
+        }
+    }
+    
+    func deletePreferenceForKey(key: String, completion: AccountKitPreferenceCompletion) {
+        if let accountPreferences = accountPreferences {
+            deletePreferenceArray.append((key: key, closure: completion))
+            accountPreferences.delegate = self
+            accountPreferences.deletePreferenceForKey(key)
+        } else {
+            completion(AccountKitHandler.AccountKitHandlerPreferenceResponseState.Failure(description: Constants.accountPreferencesNotAccessible))
+        }
+    }
 }
+
+//MARK: - AKFViewControllerDelegate Delegate methods
 
 extension AccountKitDelegate: AKFViewControllerDelegate {
     
@@ -167,16 +230,56 @@ extension AccountKitDelegate: AKFViewControllerDelegate {
     
 }
 
+//MARK: - AKFAccountPreferencesDelegate Delegate methods
+
+extension AccountKitPreferencesDelegate: AKFAccountPreferencesDelegate {
+    
+    func accountPreferences(accountPreferences: AKFAccountPreferences, didLoadPreferences preferences: [String : String]?, error: NSError?) {
+        if let firstClosure = getAllPreferencesArray.first {
+            if let error = error {
+                firstClosure(AccountKitHandler.AccountKitHandlerAllPreferencesResponseState.Failure(description: error.localizedDescription))
+            } else {
+                firstClosure(AccountKitHandler.AccountKitHandlerAllPreferencesResponseState.Success(preferences: preferences))
+            }
+        }
+    }
+    
+    func accountPreferences(accountPreferences: AKFAccountPreferences, didLoadPreferenceForKey key: String, value: String?, error: NSError?) {
+        handlePreferenceResponse(key, inArray: getPreferenceArray, error: error)
+    }
+    
+    func accountPreferences(accountPreferences: AKFAccountPreferences, didSetPreferenceForKey key: String, value: String, error: NSError?) {
+        handlePreferenceResponse(key, inArray: setPreferenceArray, error: error)
+    }
+    
+    func accountPreferences(accountPreferences: AKFAccountPreferences, didDeletePreferenceForKey key: String, error: NSError?) {
+        handlePreferenceResponse(key, inArray: deletePreferenceArray, error: error)
+    }
+}
+
+//MARK: - Utility methods and types
+
 extension Utility {
     
     private struct Constants {
         static let stateMismatchError = "Use only one log in method at a time."
+        static let accountPreferencesNotAccessible = "Account preferences not accessible."
     }
     
     enum AccountKitHandlerResponseState {
         case Success(accessToken: AKFAccessToken?, authorizationCode: String?)
         case Failure(description: String?)
         case Cancellation
+    }
+    
+    enum AccountKitHandlerAllPreferencesResponseState {
+        case Success(preferences: [String: String]?)
+        case Failure(description: String?)
+    }
+    
+    enum AccountKitHandlerPreferenceResponseState {
+        case Success
+        case Failure(description: String?)
     }
     
     private func generateState() -> String {
@@ -191,6 +294,27 @@ extension Utility {
         currentAuthorizationCode = nil
         loginCompletion = nil
         resumeViewController = nil
+    }
+    
+    private func getObjectForKey(key: String, inArray array: [(key: String, closure: AccountKitPreferenceCompletion)]) -> AccountKitPreferenceCompletion? {
+        var closureToReturn: AccountKitPreferenceCompletion?
+        for item in array {
+            if item.key == key {
+                closureToReturn = item.closure
+                break
+            }
+        }
+        return closureToReturn
+    }
+    
+    private func handlePreferenceResponse(key: String, inArray array: [(key: String, closure: AccountKitPreferenceCompletion)], error: NSError?) {
+        if let closure = getObjectForKey(key, inArray: array) {
+            if let error = error {
+                closure(AccountKitHandler.AccountKitHandlerPreferenceResponseState.Failure(description: error.localizedDescription))
+            } else {
+                closure(AccountKitHandler.AccountKitHandlerPreferenceResponseState.Success)
+            }
+        }
     }
     
 }
